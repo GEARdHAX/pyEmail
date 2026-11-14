@@ -3,7 +3,7 @@ Hi {{Recruiters_Name}},
 I saw that {{Company_Name}} is actively hiring for a {{Job_Role}}, and I didn't want my
 application to sit in a portal queue — so I'm reaching out to you directly.
 
-I'm a {{Job_Role}} with hands-on experience in {{Key_Skill_1}} and {{Key_Skill_2}}, based in
+I'm a {{Job_Role}} with about 8 months of hands-on internship experience in {{Key_Skill_1}} and {{Key_Skill_2}}, based in
 {{Location}}. In my last role at {{Previous_Company}}, I {{One_Concrete_Achievement_With_A_Number}}.
 
 My resume is attached. If there's a better person on your team to send this to, I'd be grateful
