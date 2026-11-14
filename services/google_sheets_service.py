@@ -47,3 +47,10 @@ class GoogleSheetsService:
         cell = f"{self.quote_tab(tab)}!{self.column_letter(column_index)}{row_number}"
         self.update_status(sheet_id, cell, value)
         return cell
+
+    def update_cells(self, sheet_id, cells):
+        """Write several cells in ONE batchUpdate request. cells: [(tab, col_index, row_number, value)]."""
+        data = [{'range': f"{self.quote_tab(t)}!{self.column_letter(c)}{r}", 'values': [[v]]}
+                for t, c, r, v in cells]
+        self.service.spreadsheets().values().batchUpdate(
+            spreadsheetId=sheet_id, body={'valueInputOption': 'RAW', 'data': data}).execute()

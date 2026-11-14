@@ -24,3 +24,6 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local tracking database (contains recipients and event history)
+data/

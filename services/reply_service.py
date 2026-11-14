@@ -6,26 +6,14 @@ Merge status cell, and only if that cell still holds one of the "check" statuses
 import re
 
 from services.logger import get_logger
+from services.message_classifier import HUMAN, classify_message
 from services.outreach_service import EMAIL_RE, _norm
 
 logger = get_logger(__name__)
 
-AUTO_SUBJECT = re.compile(
-    r'(auto(matic)?[- ]?reply|autoreply|out of office|undeliverable|delivery status|'
-    r'mail delivery|delivery failure|returned mail)', re.I)
-
-
-def is_automatic(headers):
-    """True for out-of-office / bounce / bulk mail, so only human replies count."""
-    if headers.get('auto-submitted', 'no').strip().lower() != 'no':
-        return True
-    if headers.get('precedence', '').strip().lower() in ('bulk', 'auto_reply', 'junk', 'list'):
-        return True
-    if headers.get('x-autoreply'):
-        return True
-    if 'mailer-daemon' in headers.get('from', '').lower() or 'postmaster' in headers.get('from', '').lower():
-        return True
-    return bool(AUTO_SUBJECT.search(headers.get('subject', '')))
+def is_automatic(headers, snippet=''):
+    """True for out-of-office, bounce, bulk and system mail, so only human replies count."""
+    return classify_message(headers, snippet) != HUMAN
 
 
 class ReplyService:
