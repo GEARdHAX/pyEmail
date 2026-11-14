@@ -151,7 +151,7 @@ class PipelineTests(Base):
         self.assertIn('at PrevC I grew 2x.', by_to['cy@c.com']['body'])
         self.assertEqual(by_to['rae@r.com']['subject'],
                          'Application for Dev — Adarsh Arya, available immediately')
-        self.assertIn('5 years of experience in Python and SQL', by_to['rae@r.com']['body'])
+        self.assertIn('hands-on experience in Python and SQL', by_to['rae@r.com']['body'])
         self.assertEqual(by_to['fo@x.com']['subject'], 'Re: A PM who already understands what FoCo does')
         for m in gmail.sent:
             self.assertNotIn('{{', m['subject'] + m['body'])
