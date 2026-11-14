@@ -1,0 +1,14 @@
+Hi {{Name}},
+
+You don't have a {{Job_Role}} opening posted right now — I'm writing anyway, because
+growing teams usually need one before they get around to posting it.
+
+I noticed {{Something_Specific_A_Recent_Launch_Funding_News_Or_A_Gap_You_Could_Fill}}. That's
+the kind of work I do: at {{Previous_Company}} I {{One_Concrete_Achievement_With_A_Number}}.
+
+If a role like this opens in the next few months, I'd love to be the first person you think of. My
+resume is attached, and I'm based in {{Location}} — happy to chat whenever it's useful.
+
+Warm regards,
+
+Adarsh Arya · 7362973003 · https://www.linkedin.com/in/adarsharya2911/

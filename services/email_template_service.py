@@ -34,3 +34,31 @@ class EmailTemplateService:
     def validate_recipient(self, email):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
+
+    PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+
+    @classmethod
+    def placeholders(cls, text):
+        """Placeholder names in order of first appearance."""
+        seen = []
+        for name in cls.PLACEHOLDER_RE.findall(text):
+            if name not in seen:
+                seen.append(name)
+        return seen
+
+    @classmethod
+    def render_strict(cls, text, values):
+        """Substitute every {{placeholder}} verbatim (no other text is touched).
+
+        Returns (rendered, missing). `missing` lists placeholders with no value
+        or a blank value; in that case rendered is None.
+        """
+        names = cls.placeholders(text)
+        missing = [n for n in names if not str(values.get(n, "")).strip()]
+        if missing:
+            return None, missing
+        rendered = cls.PLACEHOLDER_RE.sub(lambda m: str(values[m.group(1)]).strip(), text)
+        leftover = cls.placeholders(rendered)
+        if leftover:  # a cell value itself contained {{...}}
+            return None, leftover
+        return rendered, None

@@ -1,0 +1,26 @@
+# Secrets / credentials (never commit)
+.env
+credentials.json
+token.json
+client_secret*.json
+*.pem
+
+# Personal files and runtime data
+assets/*.pdf
+logs/
+reports/
+seen.json
+sheet_backup*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

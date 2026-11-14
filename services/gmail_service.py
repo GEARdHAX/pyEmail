@@ -6,6 +6,7 @@ import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.header import Header
 from googleapiclient.discovery import build
 from services.logger import get_logger
 
@@ -28,13 +29,15 @@ class GmailService:
                 token.write(self.creds.to_json())
         self.service = build('gmail', 'v1', credentials=self.creds)
 
-    def send_email(self, to, subject, body, attachment_path=None):
+    def send_email(self, to, subject, body, attachment_path=None, subtype='html'):
         message = MIMEMultipart()
         message['to'] = to
-        message['subject'] = subject
-        message.attach(MIMEText(body, 'html'))
+        message['subject'] = Header(subject, 'utf-8') if not subject.isascii() else subject
+        message.attach(MIMEText(body, subtype, 'utf-8'))
 
-        if attachment_path and os.path.exists(attachment_path):
+        if attachment_path:
+            if not os.path.exists(attachment_path):
+                raise FileNotFoundError(f"Attachment not found: {attachment_path}")
             with open(attachment_path, "rb") as f:
                 part = MIMEApplication(f.read(), Name=os.path.basename(attachment_path))
                 part['Content-Disposition'] = f'attachment; filename="{os.path.basename(attachment_path)}"'

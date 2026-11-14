@@ -1,0 +1,14 @@
+Hi {{Recruiters_Name}},
+
+I saw that {{Company_Name}} is actively hiring for a {{Job_Role}}, and I didn't want my
+application to sit in a portal queue — so I'm reaching out to you directly.
+
+I'm a {{Job_Role}} with {{X_years}} years of experience in {{Key_Skill_1}} and {{Key_Skill_2}}, based in
+{{Location}}. In my last role at {{Previous_Company}}, I {{One_Concrete_Achievement_With_A_Number}}.
+
+My resume is attached. If there's a better person on your team to send this to, I'd be grateful
+if you could point me to them.
+
+Thank you for your time,
+
+Adarsh Arya · 7362973003 · https://www.linkedin.com/in/adarsharya2911/

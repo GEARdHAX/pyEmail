@@ -1,0 +1,12 @@
+Hi {{Name}},
+
+Just floating this back to the top of your inbox — I know how quickly things get buried.
+
+Since I last wrote, {{One_New_Thing_A_Project_You_Shipped_A_Certification_Or_A_Relevant_Idea_For_Their_Company}}. I remain very interested in the {{Job_Role}} opportunity at {{Company_Name}}.
+
+If the timing isn't right or the role is filled, a one-line reply saying so would honestly be
+appreciated — I'll stop following up and cheer you on from the sidelines.
+
+Thanks again,
+
+Adarsh Arya · 7362973003

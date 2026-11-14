@@ -29,10 +29,42 @@ def validate_configs():
 
     return errors
 
+def build_outreach(send):
+    from services.gmail_service import GmailService
+    from services.google_sheets_service import GoogleSheetsService
+    from services.outreach_service import OutreachService, load_mapping
+    gmail = GmailService(GOOGLE_CREDENTIALS_FILE, GMAIL_TOKEN_FILE)
+    sheets = GoogleSheetsService(gmail.creds)
+    return sheets, OutreachService(
+        sheets, gmail, EmailTemplateService(), DuplicatePreventionService(), TrackingService(),
+        load_mapping(), GOOGLE_SHEET_ID, RESUME_PATH, send_enabled=send)
+
+def print_results(results, full=0):
+    shown = {}
+    for r in results:
+        print(f"[{r['tab']}] row {r.get('row', '-')}: {r['status']} {r.get('to', '')} {r.get('missing', '') or r.get('detail', '')}")
+        if r['status'] == 'PREVIEW':
+            print(f"    Subject: {r['subject']}")
+            if shown.get(r['tab'], 0) < full:
+                shown[r['tab']] = shown.get(r['tab'], 0) + 1
+                print(f"    To: {r['to']}   Attachment: {r['attach'] or 'none'}")
+                print("    Placeholders: " + json.dumps(r['placeholders'], ensure_ascii=False))
+                print("    ---- body ----")
+                print(r['body'])
+                print("    --------------")
+
 def main():
     parser = argparse.ArgumentParser(description="Email Outreach Automation CLI")
-    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate'], help="Execution mode")
+    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate', 'tabs', 'fix-headers'], help="Execution mode")
+    parser.add_argument('--full', type=int, default=0, metavar='N',
+                        help="preview: print complete rendered emails for the first N previewable rows per tab")
+    parser.add_argument('--only', metavar='"TAB NAME:ROW"',
+                        help='process just one sheet row, e.g. "01 - HR and Recruiter:58"')
     args = parser.parse_args()
+    only = None
+    if args.only:
+        tab_name, _, row_no = args.only.rpartition(':')
+        only = (tab_name, int(row_no))
 
     if args.mode == 'validate':
         logger.info("Validating configurations...")
@@ -58,6 +90,24 @@ def main():
 
         logger.info("Running in PREVIEW mode. No emails will be sent.")
         print("Previewing outreach data...")
+        _, outreach = build_outreach(send=False)
+        outreach.only = only
+        print_results(outreach.process_all(), args.full)
+
+    elif args.mode == 'fix-headers':
+        # Opt-in: adds missing header names (no data cells) to the follow-up tab only.
+        _, outreach = build_outreach(send=False)
+        tab = next(t for t, c in outreach.cfg['tabs'].items() if c['template'] == 'followup')
+        added = outreach.ensure_headers(tab, [outreach.cfg['merge_status_header'], 'Your_Original_Subject_Line'])
+        print(f"{tab!r}: added headers {added}" if added else f"{tab!r}: nothing to add")
+
+    elif args.mode == 'tabs':
+        from services.gmail_service import GmailService
+        from services.google_sheets_service import GoogleSheetsService
+        sheets = GoogleSheetsService(GmailService(GOOGLE_CREDENTIALS_FILE, GMAIL_TOKEN_FILE).creds)
+        for tab in sheets.list_tabs(GOOGLE_SHEET_ID):
+            rows = sheets.get_tab_values(GOOGLE_SHEET_ID, tab)
+            print(f"TAB {tab!r}: headers (row 1) = {rows[0] if rows else None}")
 
     elif args.mode == 'send':
         if DRY_RUN or not ENABLE_EMAIL_SENDING:
@@ -66,6 +116,9 @@ def main():
             return
 
         logger.info("Processing outreach sending...")
+        _, outreach = build_outreach(send=True)
+        outreach.only = only
+        print_results(outreach.process_all())
 
     elif args.mode == 'report':
         logger.info("Generating report...")

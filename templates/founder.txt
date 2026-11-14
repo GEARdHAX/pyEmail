@@ -1,0 +1,16 @@
+Hi {{Founders_Name}},
+
+I know you probably read these emails yourself, so I'll keep this short.
+
+I've been following what {{Company_Name}} is building — {{One_Specific_Thing_About_Their_Product_Or_Mission}} genuinely stood out to me. Teams your size need people who can own
+things end-to-end, and that's exactly how I work.
+
+I'm a {{Job_Role}} from {{Location}}. Most recently I {{One_Concrete_Achievement_With_A_Number}}.
+
+I'd love 15 minutes to show you how I could do the same for you.
+
+Resume attached — and if now isn't the right time, no hard feelings at all.
+
+Best,
+
+Adarsh Arya · 7362973003 · https://www.linkedin.com/in/adarsharya2911/

@@ -1,0 +1,11 @@
+{
+  "header_row": 1,
+  "merge_status_header": "Merge status",
+  "sent_value": "EMAIL_SENT",
+  "tabs": {
+    "01 - HR and Recruiter": {"template": "recruiter", "email_header": "Email", "attach_resume": true,  "field_map": {}},
+    "02 - CEO and Founder":  {"template": "founder",   "email_header": "Email", "attach_resume": true,  "field_map": {}},
+    "03 - Speculative":      {"template": "cold",      "email_header": "Email", "attach_resume": true,  "field_map": {}},
+    "04 - Follow-up":        {"template": "followup",  "email_header": "Email", "attach_resume": false, "field_map": {}}
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy to tab_mapping.json and replace the keys with the EXACT tab names from your spreadsheet. Nothing here has been verified against the real sheet.",
+  "header_row": 1,
+  "merge_status_header": "Merge status",
+  "sent_value": "EMAIL_SENT",
+  "tabs": {
+    "EXACT TAB NAME 1": {
+      "template": "founder",
+      "email_header": "EXACT EMAIL HEADER",
+      "attach_resume": true,
+      "field_map": {}
+    },
+    "EXACT TAB NAME 2": {"template": "cold",      "email_header": "EXACT EMAIL HEADER", "attach_resume": true,  "field_map": {}},
+    "EXACT TAB NAME 3": {"template": "recruiter", "email_header": "EXACT EMAIL HEADER", "attach_resume": true,  "field_map": {}},
+    "EXACT TAB NAME 4": {"template": "followup",  "email_header": "EXACT EMAIL HEADER", "attach_resume": false, "field_map": {}}
+  }
+}
