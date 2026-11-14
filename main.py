@@ -14,6 +14,7 @@ logger = get_logger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCK_PATH = os.path.join(BASE_DIR, 'data', 'pyemail.lock')   # one Gmail/Sheet/DB job at a time
 REFRESH_LOG = os.path.join(BASE_DIR, 'logs', 'refresh.log')
+DAILY_LOG = os.path.join(BASE_DIR, 'logs', 'daily.log')
 
 def validate_configs():
     """Validate required configuration files."""
@@ -42,7 +43,7 @@ def build_store(settings=None):
     store.import_legacy('logs/tracking.json')  # idempotent: keeps pre-existing sends covered
     return store, settings
 
-def build_outreach(send):
+def build_outreach(send, need_read=False):
     from services.gmail_service import GmailService
     from services.google_sheets_service import GoogleSheetsService
     from services.outreach_service import OutreachService, load_mapping
@@ -50,7 +51,7 @@ def build_outreach(send):
     from services.gmail_service import SCOPES_WITH_READ
     store, settings = build_store()
     # real sends also read Gmail (refresh-before-send), so they use the wider scope set
-    gmail = GmailService(GOOGLE_CREDENTIALS_FILE, GMAIL_TOKEN_FILE, scopes=SCOPES_WITH_READ if send else None)
+    gmail = GmailService(GOOGLE_CREDENTIALS_FILE, GMAIL_TOKEN_FILE, scopes=SCOPES_WITH_READ if (send or need_read) else None)
     sheets = GoogleSheetsService(gmail.creds)
     cfg = load_mapping()
     writer = SheetStatusWriter(sheets, cfg, GOOGLE_SHEET_ID)
@@ -179,7 +180,7 @@ def print_results(results, full=0):
 
 def main():
     parser = argparse.ArgumentParser(description="Email Outreach Automation CLI")
-    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate', 'tabs', 'fix-headers', 'replies', 'bounces', 'track', 'colors', 'refresh'], help="Execution mode")
+    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate', 'tabs', 'fix-headers', 'replies', 'bounces', 'track', 'colors', 'refresh', 'daily'], help="Execution mode")
     parser.add_argument('sub', nargs='?', help='track: init|serve|ingest|sync|report|uncertain|resolve')
     parser.add_argument('--full', type=int, default=0, metavar='N',
                         help="preview: print complete rendered emails for the first N previewable rows per tab")
@@ -194,6 +195,10 @@ def main():
     parser.add_argument('--recipient', help='track report: filter by recipient address')
     parser.add_argument('--since', metavar='YYYY-MM-DD', help='track report: sent on/after (UTC)')
     parser.add_argument('--until', metavar='YYYY-MM-DD', help='track report: sent before (UTC)')
+    parser.add_argument('--send', action='store_true', help='daily: after the report, send the ready emails (asks you to confirm)')
+    parser.add_argument('--limit', type=int, default=None, metavar='N',
+                        help='send/daily: stop after N send attempts this run (daily default 100)')
+    parser.add_argument('--yes', action='store_true', help='daily --send: skip the typed confirmation')
     parser.add_argument('--to', help='track test-email: recipient (your own address)')
     parser.add_argument('--key', help='track resolve: send key "TAB|email"')
     parser.add_argument('--resolve-as', dest='resolve_as', choices=['sent', 'unsent'], help='track resolve outcome')
@@ -301,6 +306,7 @@ def main():
         from services.run_lock import RunBusy
         _, outreach = build_outreach(send=True)
         outreach.only = only
+        outreach.send_limit = args.limit
         try:
             # takes the run lock, refreshes replies/bounces + Sheet, re-checks each recipient, then sends
             results = send_campaign(outreach, LOCK_PATH, REFRESH_LOG, days=args.days)
@@ -314,6 +320,16 @@ def main():
             logger.error(f"send aborted before any email: {type(e).__name__}")
             sys.exit(1)
         print_results(results)
+
+    elif args.mode == 'daily':
+        # The whole daily routine: refresh -> dashboard -> plan -> attention list -> (optional) send.
+        from services.daily import DEFAULT_LIMIT, run_daily
+        locks_open = (not DRY_RUN) and ENABLE_EMAIL_SENDING
+        _, outreach = build_outreach(send=False, need_read=True)
+        result = run_daily(outreach, outreach.cfg, LOCK_PATH, DAILY_LOG, send=args.send,
+                           limit=args.limit if args.limit else DEFAULT_LIMIT, assume_yes=args.yes,
+                           locks_open=locks_open, interactive=sys.stdin.isatty(), days=args.days)
+        sys.exit(1 if result['status'] in ('REFRESH_FAILED', 'BUSY') else 0)
 
     elif args.mode == 'refresh':
         # Unattended job (Task Scheduler): ingest replies/bounces + sync the Sheet. NEVER sends email.

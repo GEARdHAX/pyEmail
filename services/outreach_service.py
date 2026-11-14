@@ -79,6 +79,8 @@ class OutreachService:
         self.store, self.writer, self.track = store, writer, track
         self.revalidate = revalidate   # re-read the live row + tracking DB right before every send
         self._email_col = None
+        self.send_limit = None   # optional cap on Gmail send attempts per process_all() run
+        self._attempted = 0
         self._tpl = {}
         self._cache, self._blocked = {}, {}
         self.only = None  # optional (tab, row_number): process just that one row
@@ -96,6 +98,7 @@ class OutreachService:
 
     # -- per tab ---------------------------------------------------------
     def process_all(self):
+        self._attempted = 0
         actual = self.sheets.list_tabs(self.sheet_id)
         if self.writer:
             self.writer.begin_run()
@@ -263,6 +266,9 @@ class OutreachService:
         return None
 
     def _send_one(self, tab, tcfg, offset, status_col, key, to, subject, body, attach, res):
+        if self.send_limit is not None and self._attempted >= self.send_limit:
+            res.update(status='SKIP_DAILY_LIMIT')   # cap reached: the rest waits for the next run
+            return
         verdict = self._revalidate(tab, offset, to, status_col)
         if verdict:
             res.update(status=verdict)
@@ -281,6 +287,7 @@ class OutreachService:
                              f"not sending (see `track uncertain` / `track resolve`)")
                 return
         extra = {}
+        self._attempted += 1   # counts real Gmail attempts (not skips) against send_limit
         try:
             if self._tracking_on():
                 from services.tracking_injector import build_tracked_html

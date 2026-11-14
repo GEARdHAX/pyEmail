@@ -74,7 +74,11 @@ def refresh(store, gmail, writer, settings, days=45):
     if failed:
         raise RefreshError(f"sheet sync incomplete: {failed} write(s) failed")
     sync = Counter(r['result'] for r in results)
+    fresh = [{'category': d['category'], 'tab': d['tab'], 'row': d['row'], 'to': d['to']}
+             for d in summary['detections']
+             if d['new'] and d['category'] in ('reply', 'bounce_permanent', 'bounce_temporary')]
     return {
+        'new_detections': fresh,   # for on-screen reports only; never written to logs
         'events': dict(summary['counts']), 'new_events': dict(summary['new']),
         'unresolved': dict(summary['unresolved']), 'backfilled': summary['backfilled'],
         'sync': dict(sync), 'sheet_writes': sync.get('WRITTEN', 0),
