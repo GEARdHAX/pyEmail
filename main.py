@@ -55,11 +55,14 @@ def print_results(results, full=0):
 
 def main():
     parser = argparse.ArgumentParser(description="Email Outreach Automation CLI")
-    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate', 'tabs', 'fix-headers'], help="Execution mode")
+    parser.add_argument('mode', choices=['preview', 'send', 'report', 'validate', 'tabs', 'fix-headers', 'replies'], help="Execution mode")
     parser.add_argument('--full', type=int, default=0, metavar='N',
                         help="preview: print complete rendered emails for the first N previewable rows per tab")
     parser.add_argument('--only', metavar='"TAB NAME:ROW"',
                         help='process just one sheet row, e.g. "01 - HR and Recruiter:58"')
+    parser.add_argument('--apply', action='store_true',
+                        help='replies: write RESPONDED to Merge status (default is preview only)')
+    parser.add_argument('--days', type=int, default=45, help='replies: look back this many days (default 45)')
     args = parser.parse_args()
     only = None
     if args.only:
@@ -100,6 +103,20 @@ def main():
         tab = next(t for t, c in outreach.cfg['tabs'].items() if c['template'] == 'followup')
         added = outreach.ensure_headers(tab, [outreach.cfg['merge_status_header'], 'Your_Original_Subject_Line'])
         print(f"{tab!r}: added headers {added}" if added else f"{tab!r}: nothing to add")
+
+    elif args.mode == 'replies':
+        # Reads Gmail (needs the gmail.readonly scope: first run asks for consent again).
+        from services.gmail_service import GmailService, SCOPES_WITH_READ
+        from services.google_sheets_service import GoogleSheetsService
+        from services.outreach_service import load_mapping
+        from services.reply_service import ReplyService
+        gmail = GmailService(GOOGLE_CREDENTIALS_FILE, GMAIL_TOKEN_FILE, scopes=SCOPES_WITH_READ)
+        svc = ReplyService(GoogleSheetsService(gmail.creds), gmail, load_mapping(), GOOGLE_SHEET_ID, args.days)
+        results = svc.check_all(apply=args.apply)
+        for r in results:
+            print(f"[{r['tab']}] row {r['row']}: {r['result']} {r['to']} (was {r['status']})")
+        print(f"\nchecked {len(results)} rows; replied: {sum(r['result'].startswith('REPLIED') for r in results)}"
+              + ("" if args.apply else "  [preview only - add --apply to write RESPONDED]"))
 
     elif args.mode == 'tabs':
         from services.gmail_service import GmailService

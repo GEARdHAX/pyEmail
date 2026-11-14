@@ -292,6 +292,68 @@ class StatusHandlingTests(Base):
         self.assertEqual(sheets.updates, [])
 
 
+class FakeReplyGmail:
+    """sent: {addr: ms}; inbound: {addr: [(ms, headers)]}"""
+
+    def __init__(self, sent, inbound):
+        self.sent, self.inbound = sent, inbound
+
+    def first_sent_ms(self, address, days=45):
+        return self.sent.get(address)
+
+    def find_replies(self, address, days=45):
+        return [{'id': 'i', 'threadId': 't', 'internalDate': ms, 'headers': h}
+                for ms, h in self.inbound.get(address, [])]
+
+
+class ReplyTests(unittest.TestCase):
+    ROWS = [['Merge status', 'Email', 'Campaign status'],
+            ['EMAIL_SENT', 'yes@x.com', 'camp'],        # human reply
+            ['EMAIL_OPENED', 'ooo@x.com', ''],          # only out-of-office
+            ['EMAIL_SENT', 'old@x.com', ''],            # inbound mail BEFORE we sent
+            ['EMAIL_SENT', 'none@x.com', ''],           # nothing
+            ['EMAIL_SENT', 'nocopy@x.com', ''],         # no sent copy found
+            ['', 'blank@x.com', ''],                    # not checked (blank status)
+            ['BOUNCED', 'b@x.com', ''],                 # not checked
+            ['RESPONDED', 'r@x.com', '']]               # not checked
+
+    def run_it(self, apply, rows=None):
+        from services.reply_service import ReplyService
+        sheets = FakeSheets({'T': rows or self.ROWS})
+        sheets.get_sheet_data = lambda sid, rng: [[(rows or self.ROWS)[int(rng.split('A')[-1]) - 1][0]]]
+        gmail = FakeReplyGmail(
+            {'yes@x.com': 1000, 'ooo@x.com': 1000, 'old@x.com': 1000, 'none@x.com': 1000},
+            {'yes@x.com': [(2000, {'from': 'Yes <yes@x.com>', 'subject': 'Re: hi'})],
+             'ooo@x.com': [(2000, {'subject': 'Out of Office: away'}), (2500, {'auto-submitted': 'auto-replied'})],
+             'old@x.com': [(500, {'subject': 'earlier chat'})]})
+        cfg = {**MAPPING, 'tabs': {'T': {'template': 'followup', 'email_header': 'Email'}}}
+        svc = ReplyService(sheets, gmail, cfg, 'SID')
+        return svc.check_all(apply=apply), sheets
+
+    def test_preview_classifies_and_writes_nothing(self):
+        res, sheets = self.run_it(False)
+        self.assertEqual({r['to']: r['result'] for r in res},
+                         {'yes@x.com': 'REPLIED', 'ooo@x.com': 'AUTO_REPLY_ONLY', 'old@x.com': 'NO_REPLY',
+                          'none@x.com': 'NO_REPLY', 'nocopy@x.com': 'NO_SENT_COPY'})
+        self.assertEqual(sheets.updates, [])
+
+    def test_apply_writes_only_merge_status_of_replied_row(self):
+        res, sheets = self.run_it(True)
+        self.assertEqual(sheets.updates, [("'T'!A2", 'RESPONDED')])  # Campaign status (C) untouched
+        self.assertEqual([r['result'] for r in res if r['to'] == 'yes@x.com'], ['REPLIED_MARKED'])
+
+    def test_apply_does_not_overwrite_if_status_changed(self):
+        from services.reply_service import ReplyService
+        rows = [list(r) for r in self.ROWS]
+        sheets = FakeSheets({'T': rows})
+        sheets.get_sheet_data = lambda sid, rng: [['BOUNCED']]  # changed since we read it
+        gmail = FakeReplyGmail({'yes@x.com': 1}, {'yes@x.com': [(9, {'subject': 'hi'})]})
+        cfg = {**MAPPING, 'tabs': {'T': {'template': 'followup', 'email_header': 'Email'}}}
+        res = ReplyService(sheets, gmail, cfg, 'SID').check_all(apply=True)
+        self.assertEqual(sheets.updates, [])
+        self.assertEqual(res[0]['result'], 'REPLIED_NOT_MARKED_STATUS_CHANGED')
+
+
 class SheetHelpers(unittest.TestCase):
     def test_a1(self):
         g = GoogleSheetsService
