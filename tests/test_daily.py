@@ -224,6 +224,7 @@ class CliWiringTests(DailyBase):
         with mock.patch.object(sys, 'argv', ['run.py', *argv]), \
                 mock.patch.object(main, 'DRY_RUN', locks[0]), mock.patch.object(main, 'ENABLE_EMAIL_SENDING', locks[1]), \
                 mock.patch.object(main, 'LOCK_PATH', self.lock), mock.patch.object(main, 'DAILY_LOG', self.daily_log), \
+                mock.patch.object(main, 'REFRESH_LOG', self.log), \
                 mock.patch.object(main, 'build_outreach', return_value=(None, outreach)), \
                 contextlib.redirect_stdout(out):
             try:

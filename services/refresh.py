@@ -20,6 +20,7 @@ from logging.handlers import RotatingFileHandler
 from services.event_ingest import ingest_all
 from services.run_lock import RunBusy, RunLock
 from services.status_sync import sync_statuses
+from services.tracking_health import guard_before_send
 
 
 class RefreshError(RuntimeError):
@@ -94,6 +95,11 @@ def _counts_line(info):
     return ' '.join(parts)
 
 
+def _default_probe():
+    from services.tracking_health import check_tracking_endpoint
+    return check_tracking_endpoint
+
+
 # --- guarded send ---------------------------------------------------------------------------------
 def send_campaign(outreach, lock_path, log_path, days=45, lock_timeout=120):
     """Refresh, then send. Nothing is sent unless the lock is held AND the refresh fully completed."""
@@ -107,6 +113,9 @@ def send_campaign(outreach, lock_path, log_path, days=45, lock_timeout=120):
     started = time.monotonic()
     try:
         try:
+            ok, detail = guard_before_send(outreach.track, getattr(outreach, 'tracking_probe', None) or _default_probe())
+            if not ok:
+                log.warning(f"stage=pre-send tracking_address=UNREACHABLE detail={detail} (opens-only: sending allowed)")
             info = refresh(outreach.store, outreach.gmail, outreach.writer, outreach.track, days)
         except Exception as e:
             log.error(f"stage=pre-send status=FAILED_CLOSED error={type(e).__name__}: {sanitize(e)}")

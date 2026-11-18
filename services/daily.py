@@ -5,7 +5,7 @@
     3. Dashboard        how many rows are in each status, per tab, plus today's new bounces/replies
     4. Plan             what a send would do right now (nothing is sent in this step)
     5. Attention list   rows a human should fix: missing data, bad emails, unknown statuses, duplicates...
-    6. Send (--send)    only if the locks are open AND you type the confirmation phrase; capped by --limit
+    6. Send (--send)    only if the locks are open AND you type SEND <number> (you choose how many); capped by --limit
 
 Everything runs under the shared run lock. Any refresh failure stops the routine before any send.
 The log (logs/daily.log) holds counts only: no addresses, no message text.
@@ -16,6 +16,7 @@ from collections import Counter, OrderedDict
 from services.outreach_service import EMAIL_RE, _norm
 from services.refresh import get_refresh_logger, refresh, sanitize
 from services.run_lock import RunLock
+from services.tracking_health import TrackingUnavailable, guard_before_send
 
 DEFAULT_LIMIT = 100   # per run; keeps well under Gmail's daily caps and protects sender reputation
 ATTENTION = OrderedDict([
@@ -104,6 +105,19 @@ def run_daily(outreach, cfg, lock_path, log_path, *, send=False, limit=DEFAULT_L
         say("=" * 70)
         say("1/6  SAFETY LOCKS")
         say(f"     sending is {'UNLOCKED (DRY_RUN off, ENABLE_EMAIL_SENDING on)' if locks_open else 'LOCKED (preview only)'}")
+        track = outreach.track
+        probe = getattr(outreach, 'tracking_probe', None)
+        if track and track.enabled:
+            from services.tracking_health import check_tracking_endpoint
+            t_ok, t_detail = (probe or check_tracking_endpoint)(track)
+            mode = 'opens + clicks' if track.track_clicks else 'opens only'
+            say(f"     tracking is ON ({mode}); tracking address: "
+                + ("reachable" if t_ok else f"NOT REACHABLE ({t_detail}) - " + (
+                    "do not send until it is fixed: links would be broken" if track.track_clicks
+                    else "opens will not be recorded until it is fixed")))
+        else:
+            t_ok, t_detail = True, 'tracking off'
+            say("     tracking is OFF")
 
         # 2 ---------------------------------------------------------------- refresh
         say("2/6  REFRESH  (new replies/bounces from Gmail -> Sheet)")
@@ -189,25 +203,39 @@ def run_daily(outreach, cfg, lock_path, log_path, *, send=False, limit=DEFAULT_L
         elif ready == 0:
             say("     Nothing to send today.")
             out['status'] = 'NOTHING_TO_SEND'
+        elif not t_ok and outreach.track and outreach.track.track_clicks:
+            say("     NOT SENDING: the tracking address is down and click tracking is on, so the links in the")
+            say("     emails would be broken. Fix Tailscale / the tracking server, or set TRACKING_CLICKS=false in .env.")
+            out['status'] = 'TRACKING_DOWN'
         elif not locks_open:
             say("     Sending is LOCKED in .env, so nothing was sent. For a one-time unlock without editing .env:")
             say("       PowerShell:  $env:DRY_RUN='false'; $env:ENABLE_EMAIL_SENDING='true'; python run.py daily --send")
             out['status'] = 'LOCKED'
         else:
-            to_send = min(ready, limit)
+            max_send = min(ready, limit)          # the most this run is allowed to send
+            to_send = max_send
             if not assume_yes:
                 if not interactive:
                     say("     Not an interactive terminal and --yes was not given: nothing sent.")
                     return {**out, 'status': 'NEEDS_CONFIRMATION'}
-                phrase = f"SEND {to_send}"
-                say(f"     About to send {to_send} email(s)" + (f" (cap {limit}; {ready - to_send} will wait for the next run)"
-                                                              if ready > to_send else "") + ".")
-                answer = ask(f"     Type  {phrase}  to send now, anything else cancels: ")
-                if answer.strip() != phrase:
+                say(f"     {ready} email(s) are ready" + (f"; the cap is {limit}, so {ready - max_send} will wait for the next run"
+                                                          if ready > max_send else "") + ".")
+                answer = ask(f"     YOU choose how many: type  SEND <number>  (1 to {max_send}), e.g. SEND {max_send}. "
+                             f"Anything else cancels: ")
+                match = re.fullmatch(r'send\s+(\d+)', answer.strip(), re.IGNORECASE)
+                if not match:
                     say("     Cancelled. Nothing was sent.")
                     log.info("daily status=CANCELLED")
                     return {**out, 'status': 'CANCELLED'}
-            outreach.send_enabled, outreach.revalidate, outreach.send_limit = True, True, limit
+                to_send = int(match.group(1))
+                if not 1 <= to_send <= max_send:
+                    say(f"     {to_send} is not between 1 and {max_send}. Cancelled. Nothing was sent.")
+                    log.info("daily status=CANCELLED reason=number_out_of_range")
+                    return {**out, 'status': 'CANCELLED'}
+                if to_send < max_send:
+                    say(f"     OK: sending {to_send} of the {ready} ready (the first {to_send}, in tab and row order). "
+                        f"The other {ready - to_send} stay pending for the next run.")
+            outreach.send_enabled, outreach.revalidate, outreach.send_limit = True, True, to_send
             results = outreach.process_all()   # lock held + refresh done moments ago + per-recipient final check
             counts = Counter(r.get('status') for r in results)
             sent, failed = counts.get('SENT', 0), counts.get('SEND_FAILED', 0)
